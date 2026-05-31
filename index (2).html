@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>班级学生记录助手</title>
+    <meta name="theme-color" content="#f8fafc">
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 React 和 ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- 引入 Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body {
+            -webkit-tap-highlight-color: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 动画定义 */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .animate-scale-in { animation: scaleIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        .tap-effect { transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1); }
+        .tap-effect:active { transform: scale(0.96); }
+
+        /* Glassmorphism utilities */
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 
+                            50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 
+                            500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9', 
+                            900: '#4c1d95' 
+                        },
+                        surface: '#ffffff',
+                        background: '#f8fafc',
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'glow': '0 0 15px rgba(139, 92, 246, 0.3)',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="text-slate-800 antialiased selection:bg-primary-100 selection:text-primary-700">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- 图标组件 ---
+        const Icon = ({ children, size = 20, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
+        );
+        // 图标定义保持不变
+        const Save = (p) => <Icon {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></Icon>;
+        const Check = (p) => <Icon {...p}><polyline points="20 6 9 17 4 12"></polyline></Icon>;
+        const Trash2 = (p) => <Icon {...p}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></Icon>;
+        const Copy = (p) => <Icon {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></Icon>;
+        const Users = (p) => <Icon {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></Icon>;
+        const ListIcon = (p) => <Icon {...p}><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></Icon>;
+        const XCircle = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></Icon>;
+        const Search = (p) => <Icon {...p}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></Icon>;
+        const Clock = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></Icon>;
+        const Edit2 = (p) => <Icon {...p}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></Icon>;
+        const Settings = (p) => <Icon {...p}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></Icon>;
+        const Download = (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></Icon>;
+        const Upload = (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></Icon>;
+        const UserPlus = (p) => <Icon {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></Icon>;
+        const RefreshCw = (p) => <Icon {...p}><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></Icon>;
+        const Plus = (p) => <Icon {...p}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></Icon>;
+        const AlertTriangle = (p) => <Icon {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></Icon>;
+        const X = (p) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></Icon>;
+
+        // --- 默认数据配置 (保持不变) ---
+        const DEFAULT_CLASS_DATA = {
+            "3B": [
+                "罗浩宇 ADEN LOW HAO YU", "沈晨暟 ADEN SIM CHEN KAI", "林启翔 EASON LIM QI SIANG", "张语骏 ISSAC CHONG YU JUN",
+                "尤索夫 MOHAMED AYSAR EUSUFF BIN MOHD ZULHILMI", "达严 MUHAMMAD DAIYAN BIN MOHAMAD ASRAF",
+                "法益 MUHAMMAD FAAEQ AQRA BIN MUHAMMAD LUTHFI", "亦曼 MUHAMMAD IMAN MIKHAIL BIN MOHD HAFIZAL",
+                "哉伊岸 MUSYRIF ZAYYAN BIN AHMAD ZAMZAHURI", "阿纳斯 NIK ANAS MIRZA BIN NIK MUHAMAD",
+                "悉达 SIDDARTH A/L/VASU", "郑宏凯 TEH HONG KAI", "张语楦 TEOH YU XUAN", "黄宇深 WONG YU SHEN",
+                "黄子轩 WONG ZI HIN", "杨浩珉 YEOH HAO MING", "奈因 ZULQARNAIN BIN MOHAMAD TARIQ",
+                "丽亚 AASHRIYA MONA", "阿菲亚 ADRIANA AFEEYA BINTI MAHATHIR", "艾咪 AIMY RAUDHAH BINTI MOHAMAD NURHAFIZ",
+                "苏菲亚 AISY NISA SOFIA BINTI MOHD. SHAIRIL", "郑云枫 DIANA TEY VIN FWENG", "雷欣洳 DWEE XIN RU",
+                "黄慧珊 FELICIA WONG HUI SAN", "哈妮丝 HANIS FASHIHAH BINTI MOHD SHAFIQ", "苏爱勤 IRENE SAW AI QING",
+                "陈姿秀 JAELYN TING TZE SIEW", "林欣恬 LIM XIN TIAN", "刘恩希 LOW ERN XI", "王天心 ONG TIAN XIN",
+                "邱展霏 QIU ZHAN FEI", "陈歆宜 TAN XIN YI", "郑乐婷 TEE LE TING", "李心宇 TIFFANY LEE XIN YU",
+                "黄竩媗 WONG YEE XUAN", "叶慧琪 YAP HUI QI"
+            ],
+            "4B": [
+                "扎关 AIMIEL NURZAQUAN BIN JURIMI", "亚斯利 ASHLLEY ANAK SAMON", "加威尔 JAVIER KENT JUNIOR ANAK JOHN",
+                "杰米亚 JEREMIAH MANJAN ANAK EDAL", "江朾浩 KONG CHENG HAO", "刘鑫宏 LOW XIN HONG",
+                "黄天浩 LUCAS WONG TIAN HAO", "拉其克 MOHAMAD AQIL RAZIQ BIN MOHAMAD AZAM",
+                "拉斐 MOHAMAD RAFIUDDIN QAWI BIN KHAIRUL HISHAM", "沙鲁 MOHAMAD SHAHRUL IZUAN HAFIZIE BIN MOHD SYUKRI",
+                "亚司岚 MUHAMMAD ASHIM ASLAM BIN HASNIZAR", "叶健峰 STANLEY YAP KEN FENG", "陈其鸿 TONNY TING QI HONG",
+                "依达侑 ANIS NUUR IDAYU BINTI SALLEH", "碧碧 BIBI SAKINAH BINTI MOHD YUSOF", "尤妮 DEZWAYNE EUNICE ANAK GANI",
+                "莎丽妮 ELLISA SARLINIE ANAK KENNEDY", "娅琪菈 FAZREEN SYAIDATUL AQIEYLA BINTI ABDUL FATTAH",
+                "王亿妠 INA ONG", "林杏恩 LIM XING EN", "罗玲微 LOH LING WEI", "露丝迪娅 NUR RUSHYDHIA HADIRAH BINTI MOHD RAEIF",
+                "潘巧欣 PHUAH QIAO XIN", "仂必妒 PUTRI RABIAHTUL ADIWIYA BINTI MUHADRI", "陈妤欣 TAN YU XIN"
+            ],
+            "4D": [
+                "EZANNY ALAN MIKHAIL BIN AIZAD", "法帝 AL FATEH RIFQI BIN ZAFRIE", "陈锦慷 ALWISH CHAN KAM HONG",
+                "骆禹皓 ANTONY LOCK YU HAO", "谢宇恒 CHAI YU HEN", "王丞昊 DANIEL WONG CHENG HAO",
+                "徐晨瀚 GRAYSON CHEE CHEN HAN", "徐传恩 JOEN SII", "赖楷泽 LAI KAI ZE", "李小龙 LEE XIAO LONG",
+                "黄伟宏 LEO WONG WEI HONG", "玛提修斯 MATIUS GASING ANAK ANTHONY", "哈扎 MUHAMAD HAMZAH BIN MOHD SHAFI RAFI",
+                "亚当 MUHAMMAD ADAM ZIYYADH BIN AZROY", "陈凯俊 MUHAMMAD ASYRAAF BIN CHE SUHAFAL",
+                "诺儿 NOAH ATHARIZZ BIN MOHD FANDI", "陈懿愷 TAN EE KYE", "张耀文 TIONG YAO UNG",
+                "迪扬 TIVHYAN A/L PARTHIBAA", "郑嘉颖 WINGS CHENG KA WENG", "王智杰 WONG CHEE KIT",
+                "娅菲娜 AFRINA ZULFA BINTI MOHAMMAD FAISAL", "安妮 AMNI AMANINA BINTI MOHAMAD NOR AZIZI",
+                "谢若琳 CAROLINE CHIA", "曾语恩 CHAN YUU EN", "朱静仪 CHOO JING YI", "妲恩 DRAYYEN CHOLE EIBIESCKA JACOB",
+                "陈仪晴 GENIEVE JACLYN CHAN", "哈妮 HONEY QYRA SYATILLA BINTI 'IFIRUDIN", "蔡诗莹 JOCELYN CHAI SI YING",
+                "黄嘉欣 NG JIA XIN", "琪莎 NUR QISYA DANIA BINTI MOHAMAD JUHAIFI", "何拉 NURFATIMA HAMRA BINTI MOHAMAD BAKRI",
+                "阿淇拉 NURUL HUDA AQILA BINTI ROSLI", "雪灵 SHELYN RESHNA SURESH", "哈诗妮 SRI HASHINIE NAIR A/P SUDHAKARAN",
+                "罗凯恩 STELLA LOH KAI EN", "陈禹潼 TAN YU TONG", "丽亚娜 UNGKU ARIANA QALESYA BINTI UNGKU ISMAIL",
+                "李纹茹 VARRUNAAVIE LEE"
+            ]
+        };
+
+        const QUICK_TAGS = ["没做功课", "缺席", "没带书", "迟到", "没签名", "吵闹", "表现优异", "帮助同学"];
+
+        function App() {
+            // 获取本地时间字符串
+            const getLocalISOString = () => {
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                return now.toISOString().slice(0, 16);
+            };
+
+            const [activeTab, setActiveTab] = useState('entry');
+            const [editingId, setEditingId] = useState(null);
+            const [showSettings, setShowSettings] = useState(false);
+            const [showClassManager, setShowClassManager] = useState(false);
+            
+            // --- 弹窗状态 ---
+            const [modalState, setModalState] = useState({
+                show: false,
+                type: 'confirm', // 'confirm' or 'prompt' or 'alert'
+                title: '',
+                message: '',
+                defaultValue: '',
+                isDangerous: false,
+                onConfirm: null,
+            });
+
+            // 数据相关状态
+            const [classData, setClassData] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('student_tracker_class_data');
+                    return saved ? JSON.parse(saved) : DEFAULT_CLASS_DATA;
+                } catch { return DEFAULT_CLASS_DATA; }
+            });
+
+            const [eventName, setEventName] = useState('');
+            const [recordDate, setRecordDate] = useState(getLocalISOString());
+            const [selectedClass, setSelectedClass] = useState(Object.keys(DEFAULT_CLASS_DATA)[0]);
+            const [selectedStudents, setSelectedStudents] = useState([]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [historyFilter, setHistoryFilter] = useState('ALL');
+            
+            const [records, setRecords] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('student_tracker_records');
+                    return saved ? JSON.parse(saved) : [];
+                } catch { return []; }
+            });
+            const [toast, setToast] = useState({ show: false, msg: '', type: 'success' });
+            const toastTimer = useRef(null);
+            const fileInputRef = useRef(null);
+            const promptInputRef = useRef(null);
+            const settingsRef = useRef(null); // 设置面板引用
+
+            // --- 班级管理状态 ---
+            const [managerSelectedClass, setManagerSelectedClass] = useState(Object.keys(DEFAULT_CLASS_DATA)[0]);
+            const [newStudentName, setNewStudentName] = useState('');
+
+            // --- 持久化 ---
+            useEffect(() => {
+                localStorage.setItem('student_tracker_records', JSON.stringify(records));
+            }, [records]);
+
+            useEffect(() => {
+                localStorage.setItem('student_tracker_class_data', JSON.stringify(classData));
+            }, [classData]);
+
+            // 安全检查
+            useEffect(() => {
+                const availableClasses = Object.keys(classData);
+                if (availableClasses.length > 0 && !availableClasses.includes(selectedClass)) {
+                    setSelectedClass(availableClasses[0]);
+                }
+            }, [classData, selectedClass]);
+            
+            // 同步管理界面的选中状态
+            useEffect(() => {
+                const availableClasses = Object.keys(classData);
+                if (availableClasses.length > 0 && !availableClasses.includes(managerSelectedClass)) {
+                    setManagerSelectedClass(availableClasses[0]);
+                }
+            }, [classData, managerSelectedClass]);
+
+            // 聚焦 prompt 输入框
+            useEffect(() => {
+                if (modalState.show && modalState.type === 'prompt' && promptInputRef.current) {
+                    setTimeout(() => promptInputRef.current.focus(), 100);
+                }
+            }, [modalState.show]);
+
+            // 点击外部关闭设置面板
+            useEffect(() => {
+                function handleClickOutside(event) {
+                    if (settingsRef.current && !settingsRef.current.contains(event.target) && showSettings) {
+                        setShowSettings(false);
+                    }
+                }
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, [showSettings]);
+
+
+            // 切换班级时重置搜索
+            useEffect(() => {
+                if (!editingId && !showClassManager) {
+                    setSearchTerm('');
+                }
+            }, [selectedClass]);
+
+            const showToast = (msg, type = 'success') => {
+                if (toastTimer.current) clearTimeout(toastTimer.current);
+                setToast({ show: true, msg, type });
+                toastTimer.current = setTimeout(() => setToast({ show: false, msg: '', type: 'success' }), 2500);
+            };
+
+            // --- 自定义弹窗逻辑 ---
+            const showDialog = (options) => {
+                setModalState({
+                    show: true,
+                    type: options.type || 'confirm',
+                    title: options.title || '提示',
+                    message: options.message || '',
+                    defaultValue: options.defaultValue || '',
+                    isDangerous: options.isDangerous || false,
+                    onConfirm: options.onConfirm,
+                });
+            };
+
+            const closeDialog = () => {
+                setModalState(prev => ({ ...prev, show: false }));
+            };
+
+            const handleDialogConfirm = (inputValue) => {
+                if (modalState.onConfirm) {
+                    modalState.onConfirm(inputValue);
+                }
+                closeDialog();
+            };
+
+            // --- 核心业务逻辑 ---
+
+            const toggleStudent = (name) => {
+                setSelectedStudents(prev => 
+                    prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+                );
+            };
+
+            const toggleSelectAll = () => {
+                const all = classData[selectedClass] || [];
+                const targets = searchTerm ? filteredStudents : all;
+                const allTargetsSelected = targets.every(s => selectedStudents.includes(s));
+                
+                if (allTargetsSelected) {
+                    setSelectedStudents(prev => prev.filter(s => !targets.includes(s)));
+                } else {
+                    const newSelected = [...selectedStudents];
+                    targets.forEach(t => { if (!newSelected.includes(t)) newSelected.push(t); });
+                    setSelectedStudents(newSelected);
+                }
+            };
+            
+            const clearSelection = () => {
+                showDialog({
+                    type: 'confirm',
+                    title: '清空选择',
+                    message: '确定要清空当前所有已选学生吗？',
+                    isDangerous: true,
+                    onConfirm: () => setSelectedStudents([])
+                });
+            };
+
+            const handleSave = () => {
+                if (!eventName.trim()) return showToast("请输入事项名称", "error");
+                if (selectedStudents.length === 0) return showToast("请选择至少一名学生", "error");
+
+                const dateObj = new Date(recordDate);
+                const involvedClassesSet = new Set();
+                selectedStudents.forEach(stu => {
+                    for (const [cls, students] of Object.entries(classData)) {
+                        if (students.includes(stu)) {
+                            involvedClassesSet.add(cls);
+                            break;
+                        }
+                    }
+                });
+                const involvedClasses = Array.from(involvedClassesSet).sort();
+                const derivedClassName = involvedClasses.length > 0 ? involvedClasses.join(' & ') : selectedClass;
+
+                const recordData = {
+                    date: dateObj.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    fullDate: dateObj.toLocaleString('zh-CN', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    eventName: eventName.trim(),
+                    className: derivedClassName,
+                    students: selectedStudents,
+                };
+
+                if (editingId) {
+                    setRecords(prev => prev.map(r => r.id === editingId ? { ...r, ...recordData } : r));
+                    showToast("✅ 记录已更新");
+                    setEditingId(null);
+                } else {
+                    setRecords(prev => [{ id: Date.now(), ...recordData }, ...prev]);
+                    showToast("✅ 记录已保存");
+                }
+                
+                setEventName('');
+                setSelectedStudents([]);
+                setSearchTerm('');
+                setRecordDate(getLocalISOString());
+                if(editingId) setActiveTab('report');
+            };
+
+            const deleteRecord = (id) => {
+                showDialog({
+                    type: 'confirm',
+                    title: '删除记录',
+                    message: '确定要删除这条记录吗？此操作无法撤销。',
+                    isDangerous: true,
+                    onConfirm: () => {
+                        setRecords(prev => prev.filter(r => r.id !== id));
+                        showToast("🗑️ 已删除");
+                    }
+                });
+            };
+
+            const editRecord = (record) => {
+                setEditingId(record.id);
+                setEventName(record.eventName);
+                const firstClass = record.className.split(' & ')[0];
+                if (classData[firstClass]) {
+                    setSelectedClass(firstClass);
+                }
+                setSelectedStudents([...record.students]);
+                setActiveTab('entry');
+                showToast("📝 进入编辑模式", "success");
+            };
+
+            const copyRecord = (r) => {
+                const studentList = r.students.map((s, i) => `${i + 1}. ${s}`).join('\n');
+                const text = `📅 ${r.fullDate}\n🏫 ${r.className}\n📝 ${r.eventName}\n👥 名单 (${r.students.length}人):\n${studentList}`;
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try { document.execCommand('copy'); showToast("📋 已复制内容"); } catch (err) { showToast("❌ 复制失败", "error"); }
+                document.body.removeChild(textArea);
+            };
+
+            // --- 班级名单管理逻辑 ---
+            const addClass = () => {
+                showDialog({
+                    type: 'prompt',
+                    title: '新建班级',
+                    message: '请输入新班级名称 (例如: 5A, 篮球队):',
+                    onConfirm: (val) => {
+                        const className = val && val.trim();
+                        if (!className) return;
+                        if (classData[className]) {
+                            showToast("❌ 班级已存在", "error");
+                            return;
+                        }
+                        setClassData(prev => ({ ...prev, [className]: [] }));
+                        setManagerSelectedClass(className);
+                        showToast("✅ 班级已创建");
+                    }
+                });
+            };
+
+            const deleteClass = (className) => {
+                if (Object.keys(classData).length <= 1) {
+                    showToast("⚠️ 至少保留一个班级", "error");
+                    return;
+                }
+                
+                showDialog({
+                    type: 'confirm',
+                    title: '删除班级',
+                    message: `确定要删除班级 "${className}" 吗？该班级的所有学生名单将被清空（不影响历史记录）。`,
+                    isDangerous: true,
+                    onConfirm: () => {
+                        setClassData(prev => {
+                            const newData = { ...prev };
+                            delete newData[className];
+                            return newData;
+                        });
+                        showToast("🗑️ 班级已删除");
+                    }
+                });
+            };
+
+            const addStudent = () => {
+                if (!newStudentName.trim()) return;
+                const currentList = classData[managerSelectedClass] || [];
+                if (currentList.includes(newStudentName.trim())) {
+                    showToast("❌ 学生已存在", "error");
+                    return;
+                }
+                setClassData(prev => ({
+                    ...prev,
+                    [managerSelectedClass]: [...(prev[managerSelectedClass] || []), newStudentName.trim()]
+                }));
+                setNewStudentName('');
+                showToast("✅ 学生已添加");
+            };
+
+            const removeStudent = (name) => {
+                showDialog({
+                    type: 'confirm',
+                    title: '删除学生',
+                    message: `确定从名单中移除 "${name}" 吗？`,
+                    isDangerous: true,
+                    onConfirm: () => {
+                        setClassData(prev => ({
+                            ...prev,
+                            [managerSelectedClass]: prev[managerSelectedClass].filter(s => s !== name)
+                        }));
+                    }
+                });
+            };
+
+            const renameStudent = (oldName) => {
+                showDialog({
+                    type: 'prompt',
+                    title: '重命名学生',
+                    defaultValue: oldName,
+                    onConfirm: (newName) => {
+                        if (newName && newName.trim() !== oldName) {
+                            setClassData(prev => ({
+                                ...prev,
+                                [managerSelectedClass]: prev[managerSelectedClass].map(s => s === oldName ? newName.trim() : s)
+                            }));
+                            showToast("✅ 名字已修改");
+                        }
+                    }
+                });
+            };
+
+            const resetClassData = () => {
+                showDialog({
+                    type: 'confirm',
+                    title: '恢复默认',
+                    message: '警告：确定要重置所有班级名单吗？这将恢复到初始状态，您创建的新班级将丢失。',
+                    isDangerous: true,
+                    onConfirm: () => {
+                        setClassData(DEFAULT_CLASS_DATA);
+                        showToast("已恢复默认名单");
+                    }
+                });
+            }
+
+            // --- 导入导出逻辑 ---
+            const exportData = () => {
+                const data = { records, classData };
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "student_tracker_backup_" + new Date().toISOString().slice(0,10) + ".json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+                showToast("💾 数据已导出");
+                setShowSettings(false);
+            };
+
+            const importData = (event) => {
+                const fileReader = new FileReader();
+                fileReader.readAsText(event.target.files[0], "UTF-8");
+                fileReader.onload = e => {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        let newRecords = [];
+                        let newClassData = null;
+
+                        if (Array.isArray(importedData)) {
+                            newRecords = importedData;
+                        } else {
+                            newRecords = importedData.records || [];
+                            newClassData = importedData.classData;
+                        }
+
+                        showDialog({
+                            type: 'confirm',
+                            title: '导入数据',
+                            message: `检测到 ${newRecords.length} 条记录。确定导入吗？这将覆盖当前数据。`,
+                            onConfirm: () => {
+                                setRecords(newRecords);
+                                if (newClassData) setClassData(newClassData);
+                                showToast("✅ 数据导入成功");
+                                setShowSettings(false);
+                            }
+                        });
+                    } catch (err) {
+                        showToast("❌ 读取文件失败", "error");
+                    }
+                };
+            };
+
+            // 过滤与计算
+            const filteredStudents = useMemo(() => {
+                const list = classData[selectedClass] || [];
+                if (!searchTerm) return list;
+                const lowerTerm = searchTerm.toLowerCase();
+                return list.filter(s => s.toLowerCase().includes(lowerTerm));
+            }, [selectedClass, searchTerm, classData]);
+
+            const filteredRecords = useMemo(() => {
+                if (historyFilter === 'ALL') return records;
+                return records.filter(r => r.className.includes(historyFilter));
+            }, [records, historyFilter]);
+
+            const hasSelectionInClass = (cls) => {
+                const studentsInClass = classData[cls] || [];
+                return studentsInClass.some(s => selectedStudents.includes(s));
+            };
+
+            // --- Modal Component (Inline) ---
+            const Modal = () => {
+                if (!modalState.show) return null;
+
+                const inputRef = useRef(null);
+
+                return (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-modal-fade">
+                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeDialog}></div>
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 relative z-10 animate-modal-scale flex flex-col gap-5 border border-white/50">
+                            <div className="flex items-center gap-3">
+                                {modalState.isDangerous ? (
+                                    <div className="bg-red-50 p-3 rounded-2xl text-red-500 shadow-sm"><AlertTriangle size={24} /></div>
+                                ) : (
+                                    <div className="bg-primary-50 p-3 rounded-2xl text-primary-600 shadow-sm"><Settings size={24} /></div>
+                                )}
+                                <h3 className="text-xl font-bold text-slate-800 tracking-tight">{modalState.title}</h3>
+                            </div>
+                            
+                            {modalState.message && (
+                                <p className="text-slate-600 text-sm leading-relaxed">{modalState.message}</p>
+                            )}
+
+                            {modalState.type === 'prompt' && (
+                                <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 focus-within:ring-2 focus-within:ring-primary-100 focus-within:border-primary-400 transition-all">
+                                    <input 
+                                        ref={promptInputRef}
+                                        type="text" 
+                                        defaultValue={modalState.defaultValue}
+                                        className="w-full bg-transparent px-2 py-1 text-slate-800 outline-none placeholder:text-slate-400"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleDialogConfirm(e.target.value);
+                                        }}
+                                    />
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 pt-2">
+                                <button 
+                                    onClick={closeDialog} 
+                                    className="flex-1 py-3.5 rounded-2xl font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 tap-effect"
+                                >
+                                    取消
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const val = modalState.type === 'prompt' ? promptInputRef.current.value : true;
+                                        handleDialogConfirm(val);
+                                    }}
+                                    className={`flex-1 py-3.5 rounded-2xl font-bold text-sm text-white tap-effect shadow-lg shadow-primary-200 ${
+                                        modalState.isDangerous 
+                                            ? 'bg-red-500 hover:bg-red-600 shadow-red-100' 
+                                            : 'bg-primary-600 hover:bg-primary-700'
+                                    }`}
+                                >
+                                    确定
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen pb-28 max-w-md mx-auto bg-slate-50 md:border-x md:border-slate-200 md:shadow-2xl relative overflow-hidden">
+                    <Modal />
+
+                    {/* 顶部导航 (Glass) */}
+                    <div className="sticky top-0 z-30 glass px-5 py-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2.5 tracking-tight">
+                                <span className="bg-primary-600 text-white p-2 rounded-xl shadow-glow">
+                                    <Users size={20} />
+                                </span>
+                                学生记录助手
+                            </h1>
+                            <div className="relative" ref={settingsRef}>
+                                <button onClick={() => setShowSettings(!showSettings)} className={`p-2.5 rounded-xl transition-all ${showSettings ? 'bg-primary-50 text-primary-600 ring-2 ring-primary-100' : 'bg-slate-100/50 text-slate-500 hover:bg-slate-100'}`}>
+                                    <Settings size={20} />
+                                </button>
+                                
+                                {/* 设置面板 (Dropdown) */}
+                                {showSettings && (
+                                    <div className="absolute right-0 top-full mt-3 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 animate-scale-in z-50 origin-top-right">
+                                        <button 
+                                            onClick={() => { setShowClassManager(true); setShowSettings(false); }}
+                                            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                                        >
+                                            <div className="bg-primary-50 p-1.5 rounded-lg text-primary-600"><Edit2 size={16} /></div>
+                                            管理班级名单
+                                        </button>
+                                        <div className="h-px bg-slate-100 my-1"></div>
+                                        <button onClick={exportData} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors text-left">
+                                            <div className="bg-slate-100 p-1.5 rounded-lg text-slate-500"><Download size={16} /></div> 导出备份
+                                        </button>
+                                        <div className="relative">
+                                            <button onClick={() => fileInputRef.current.click()} className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors text-left">
+                                                <div className="bg-slate-100 p-1.5 rounded-lg text-slate-500"><Upload size={16} /></div> 恢复数据
+                                            </button>
+                                            <input type="file" ref={fileInputRef} onChange={importData} className="hidden" accept=".json" />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="bg-slate-100/80 p-1 rounded-2xl flex relative">
+                            <div className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-xl shadow-sm transition-all duration-300 ease-out ${activeTab === 'entry' ? 'left-1' : 'left-[calc(50%+2px)]'}`}></div>
+                            <button onClick={() => setActiveTab('entry')} className={`flex-1 relative z-10 py-2 text-sm font-bold text-center rounded-xl transition-colors ${activeTab === 'entry' ? 'text-primary-700' : 'text-slate-500'}`}>
+                                {editingId ? '编辑中...' : '录入'}
+                            </button>
+                            <button onClick={() => setActiveTab('report')} className={`flex-1 relative z-10 py-2 text-sm font-bold text-center rounded-xl transition-colors ${activeTab === 'report' ? 'text-primary-700' : 'text-slate-500'}`}>
+                                历史记录
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Toast */}
+                    <div className={`fixed top-28 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 pointer-events-none ${toast.show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
+                        <div className={`px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold flex items-center gap-3 ${toast.type === 'error' ? 'bg-red-500 text-white shadow-red-200' : 'bg-slate-800 text-white shadow-slate-300'}`}>
+                            {toast.type === 'error' ? <AlertTriangle size={18} /> : <Check size={18} />}
+                            {toast.msg}
+                        </div>
+                    </div>
+
+                    {/* 班级名单管理 Modal */}
+                    {showClassManager && (
+                        <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col animate-slide-up">
+                            <div className="glass px-5 py-4 flex items-center justify-between sticky top-0 z-10">
+                                <h2 className="text-xl font-bold text-slate-800">管理班级名单</h2>
+                                <button onClick={() => setShowClassManager(false)} className="p-2 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200"><X size={24} /></button>
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto p-5 pb-24">
+                                {/* 班级选择 Tab - 含新增按钮 */}
+                                <div className="flex gap-3 mb-6 overflow-x-auto no-scrollbar items-center pb-2">
+                                    {Object.keys(classData).map(cls => (
+                                        <button 
+                                            key={cls} 
+                                            onClick={() => setManagerSelectedClass(cls)} 
+                                            className={`px-5 py-2.5 rounded-2xl text-sm font-bold whitespace-nowrap border-2 transition-all tap-effect ${managerSelectedClass === cls ? 'bg-primary-600 text-white border-primary-600 shadow-lg shadow-primary-200' : 'bg-white text-slate-600 border-slate-100 hover:border-slate-200'}`}
+                                        >
+                                            {cls}
+                                        </button>
+                                    ))}
+                                    <button 
+                                        onClick={addClass}
+                                        className="px-4 py-2.5 rounded-2xl border-2 border-dashed border-primary-300 text-primary-600 hover:bg-primary-50 hover:border-primary-400 flex items-center gap-2 transition-colors whitespace-nowrap tap-effect"
+                                    >
+                                        <Plus size={18} /> <span className="text-xs font-bold">新班级</span>
+                                    </button>
+                                </div>
+
+                                {/* 添加学生输入框 */}
+                                <div className="bg-white p-2 rounded-2xl border border-slate-100 shadow-soft mb-6 flex gap-2 focus-within:ring-2 focus-within:ring-primary-100 transition-all">
+                                    <input 
+                                        type="text" 
+                                        value={newStudentName}
+                                        onChange={(e) => setNewStudentName(e.target.value)}
+                                        placeholder={`添加学生到 ${managerSelectedClass}...`}
+                                        className="flex-1 outline-none text-base px-3 text-slate-700 placeholder:text-slate-400"
+                                    />
+                                    <button onClick={addStudent} className="bg-primary-600 text-white p-3 rounded-xl hover:bg-primary-700 disabled:opacity-50 tap-effect transition-colors" disabled={!newStudentName.trim()}>
+                                        <UserPlus size={20} />
+                                    </button>
+                                </div>
+
+                                {/* 学生列表 */}
+                                <div className="space-y-3">
+                                    {(classData[managerSelectedClass] || []).map((stu, index) => (
+                                        <div key={stu} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-primary-100 transition-colors">
+                                            <div className="flex items-center gap-4 overflow-hidden">
+                                                <span className="text-xs font-bold text-slate-300 w-6 flex-shrink-0 text-center bg-slate-50 py-1 rounded-md">{index + 1}</span>
+                                                <span className="text-sm font-bold text-slate-700 truncate">{stu}</span>
+                                            </div>
+                                            <div className="flex gap-2 flex-shrink-0">
+                                                <button onClick={() => renameStudent(stu)} className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-colors"><Edit2 size={18} /></button>
+                                                <button onClick={() => removeStudent(stu)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 size={18} /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {(classData[managerSelectedClass] || []).length === 0 && (
+                                        <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                                            <div className="bg-slate-100 p-4 rounded-full mb-3"><Users size={32} className="opacity-40" /></div>
+                                            <p className="text-sm font-medium">此班级暂无学生</p>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* 删除班级按钮 */}
+                                <div className="flex justify-center mt-8 mb-4">
+                                    <button 
+                                        onClick={() => deleteClass(managerSelectedClass)} 
+                                        className="text-red-500 text-xs font-bold px-5 py-3 border border-red-100 bg-red-50 rounded-xl hover:bg-red-100 flex items-center gap-2 tap-effect transition-colors"
+                                    >
+                                        <Trash2 size={16} /> 删除当前班级 ({managerSelectedClass})
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="glass px-5 py-4 safe-bottom">
+                                <button onClick={resetClassData} className="w-full text-xs font-medium text-slate-400 hover:text-red-500 py-2 flex items-center justify-center gap-2 transition-colors">
+                                    <RefreshCw size={14} /> 恢复默认名单
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <main className="p-5">
+                        {activeTab === 'entry' ? (
+                            <div className="space-y-8 animate-slide-up">
+                                {editingId && (
+                                    <div className="bg-amber-50 border border-amber-200 text-amber-800 px-5 py-3 rounded-2xl text-sm font-medium flex justify-between items-center shadow-sm">
+                                        <div className="flex items-center gap-2"><Edit2 size={16}/> 正在编辑旧记录</div>
+                                        <button onClick={() => { setEditingId(null); setEventName(''); setSelectedStudents([]); }} className="bg-white/50 px-3 py-1 rounded-lg text-xs font-bold hover:bg-white hover:text-amber-900 transition-colors">取消</button>
+                                    </div>
+                                )}
+
+                                {/* 1. 日期与事项 (合并卡片) */}
+                                <div className="bg-white p-5 rounded-3xl shadow-soft border border-white/50 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-primary-50 rounded-full -mr-10 -mt-10 opacity-50 blur-2xl pointer-events-none"></div>
+                                    
+                                    <label className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-3 block ml-1">记录详情</label>
+                                    
+                                    {/* 日期 */}
+                                    <div className="bg-slate-50 p-3 rounded-2xl flex items-center gap-3 mb-4 border border-slate-100 focus-within:border-primary-300 focus-within:ring-2 focus-within:ring-primary-100 transition-all">
+                                        <div className="text-slate-400"><Clock size={18} /></div>
+                                        <input 
+                                            type="datetime-local" 
+                                            value={recordDate}
+                                            onChange={(e) => setRecordDate(e.target.value)}
+                                            className="text-sm font-bold text-slate-700 bg-transparent outline-none w-full"
+                                        />
+                                    </div>
+
+                                    {/* 事项 */}
+                                    <div className="relative mb-4">
+                                        <input
+                                            type="text"
+                                            value={eventName}
+                                            onChange={(e) => setEventName(e.target.value)}
+                                            placeholder="输入事项 (例如: 缺席)"
+                                            className="w-full text-xl font-bold text-slate-800 placeholder:text-slate-300 outline-none bg-transparent border-b-2 border-slate-100 py-2 focus:border-primary-500 transition-colors"
+                                        />
+                                        {eventName && <button onClick={() => setEventName('')} className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 p-2"><XCircle size={20} /></button>}
+                                    </div>
+                                    
+                                    {/* 快捷标签 (Capsules) */}
+                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-5 px-5 pt-1">
+                                        {QUICK_TAGS.map(tag => (
+                                            <button 
+                                                key={tag} 
+                                                onClick={() => setEventName(tag)} 
+                                                className={`whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all tap-effect border ${eventName === tag ? 'bg-primary-600 text-white border-primary-600 shadow-md shadow-primary-200' : 'bg-white text-slate-600 border-slate-200 hover:border-primary-300'}`}
+                                            >
+                                                {tag}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 2. 班级选择 */}
+                                <div>
+                                    <label className="text-xs font-extrabold text-slate-400 uppercase tracking-widest ml-1 mb-3 block">选择班级</label>
+                                    <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2 -mx-5 px-5">
+                                        {Object.keys(classData).map(cls => {
+                                            const hasActive = hasSelectionInClass(cls);
+                                            const isActive = selectedClass === cls;
+                                            return (
+                                                <button
+                                                    key={cls}
+                                                    onClick={() => setSelectedClass(cls)}
+                                                    className={`relative whitespace-nowrap px-6 py-3 rounded-2xl text-sm font-bold transition-all tap-effect border-2 ${isActive ? 'bg-slate-800 border-slate-800 text-white shadow-lg shadow-slate-200' : 'bg-white border-slate-100 text-slate-600 hover:border-slate-200'}`}
+                                                >
+                                                    {cls}
+                                                    {hasActive && (
+                                                        <span className={`absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-full border-2 border-white bg-primary-500`}>
+                                                            <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* 3. 学生选择与搜索 */}
+                                <div>
+                                    <div className="flex justify-between items-end mb-4 px-1">
+                                        <label className="text-xs font-extrabold text-slate-400 uppercase tracking-widest">
+                                            学生名单 
+                                            {selectedStudents.length > 0 && <span className="ml-2 text-primary-600 bg-primary-50 px-2 py-0.5 rounded-md">已选 {selectedStudents.length}</span>}
+                                        </label>
+                                        <div className="flex gap-2">
+                                            {selectedStudents.length > 0 && (
+                                                <button onClick={clearSelection} className="text-slate-400 text-xs font-bold px-3 py-1.5 bg-slate-100 rounded-lg hover:bg-red-50 hover:text-red-500 transition-colors">
+                                                    清空
+                                                </button>
+                                            )}
+                                            <button onClick={toggleSelectAll} className="text-primary-600 text-xs font-bold px-3 py-1.5 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors">
+                                                {selectedStudents.length > 0 && (selectedStudents.length >= filteredStudents.length + (selectedStudents.length - filteredStudents.filter(s => selectedStudents.includes(s)).length)) ? '取消全选' : '全选'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* 搜索框 */}
+                                    <div className="relative mb-4 group">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors"><Search size={18} /></div>
+                                        <input 
+                                            type="text" 
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            placeholder={`搜索 ${selectedClass} 学生...`}
+                                            className="w-full bg-white pl-11 pr-10 py-3.5 rounded-2xl text-sm font-medium border border-slate-100 shadow-sm focus:border-primary-500 focus:ring-4 focus:ring-primary-50/50 outline-none transition-all"
+                                        />
+                                        {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 p-1"><XCircle size={16} /></button>}
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 min-h-[200px] content-start">
+                                        {filteredStudents.length > 0 ? (
+                                            filteredStudents.map(stu => {
+                                                const active = selectedStudents.includes(stu);
+                                                return (
+                                                    <button
+                                                        key={stu}
+                                                        onClick={() => toggleStudent(stu)}
+                                                        className={`relative min-h-[4rem] h-auto py-3 px-3 rounded-2xl text-xs font-bold transition-all duration-200 tap-effect flex items-center justify-center border-2 leading-tight text-center break-words select-none ${active ? 'bg-primary-50 border-primary-500 text-primary-700 shadow-inner' : 'bg-white border-transparent shadow-sm text-slate-600 hover:border-slate-200'}`}
+                                                    >
+                                                        {stu}
+                                                        {active && <div className="absolute -top-1.5 -right-1.5 bg-primary-500 text-white rounded-full p-0.5 border-2 border-white shadow-sm animate-scale-in"><Check size={10} strokeWidth={4} /></div>}
+                                                    </button>
+                                                )
+                                            })
+                                        ) : (
+                                            <div className="col-span-full flex flex-col items-center justify-center py-12 text-slate-400">
+                                                <div className="bg-slate-100 p-4 rounded-full mb-3"><Search size={24} className="opacity-40"/></div>
+                                                <p className="text-sm">未找到 "{searchTerm}"</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-6 animate-slide-up">
+                                {/* 筛选器 */}
+                                {records.length > 0 && (
+                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-5 px-5 sticky top-20 z-10 bg-gradient-to-b from-slate-50 via-slate-50 to-transparent pt-2">
+                                        <button onClick={() => setHistoryFilter('ALL')} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-sm ${historyFilter === 'ALL' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-100'}`}>全部</button>
+                                        {Object.keys(classData).map(cls => (
+                                            <button key={cls} onClick={() => setHistoryFilter(cls)} className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all shadow-sm ${historyFilter === cls ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-slate-500 border-slate-100'}`}>
+                                                {cls}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {filteredRecords.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-24 text-slate-300">
+                                        <div className="bg-white p-8 rounded-full mb-6 shadow-soft"><ListIcon size={48} className="text-slate-200" /></div>
+                                        <p className="font-bold text-slate-400">暂无{historyFilter !== 'ALL' ? `${historyFilter}` : ''}记录</p>
+                                        <button onClick={() => setActiveTab('entry')} className="mt-4 text-primary-600 text-sm font-bold hover:underline">去录入一条?</button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {filteredRecords.map(r => (
+                                            <div key={r.id} className="bg-white p-5 rounded-3xl shadow-soft border border-white/60 relative group hover:shadow-lg transition-shadow">
+                                                {/* 左侧装饰条 */}
+                                                <div className="absolute left-0 top-6 bottom-6 w-1 bg-gradient-to-b from-primary-400 to-primary-600 rounded-r-full"></div>
+                                                
+                                                <div className="pl-3">
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div>
+                                                            <div className="flex items-center gap-2 text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">
+                                                                <span className="bg-slate-100 px-2 py-0.5 rounded-md text-slate-500 border border-slate-200">{r.className}</span>
+                                                                <span>{r.fullDate.split(' ')[0]}</span>
+                                                            </div>
+                                                            <h3 className="text-lg font-bold text-slate-800 leading-tight">{r.eventName}</h3>
+                                                        </div>
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => editRecord(r)} className="p-2.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-xl transition-colors"><Edit2 size={18} /></button>
+                                                            <button onClick={() => copyRecord(r)} className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"><Copy size={18} /></button>
+                                                            <button onClick={() => deleteRecord(r.id)} className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"><Trash2 size={18} /></button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-slate-50/50 rounded-xl p-3 border border-slate-100/50">
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {r.students.map((s, i) => (
+                                                                <span key={i} className="text-xs font-medium text-slate-600 bg-white border border-slate-200/60 px-2 py-1 rounded-md shadow-sm">
+                                                                    <span className="text-slate-300 font-bold mr-1">{i + 1}.</span>{s}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {records.length > 0 && (
+                                    <div className="text-center pb-8 pt-6">
+                                        <button onClick={() => { 
+                                            showDialog({
+                                                type: 'confirm',
+                                                title: '清空历史',
+                                                message: '确定要清空所有历史记录吗？此操作无法撤销。',
+                                                isDangerous: true,
+                                                onConfirm: () => setRecords([])
+                                            });
+                                        }} className="text-xs font-bold text-slate-300 hover:text-red-500 transition-colors flex items-center justify-center gap-1 mx-auto">
+                                            <Trash2 size={12}/> 清空所有历史
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+
+                    {/* 底部悬浮按钮 (Glass) */}
+                    {activeTab === 'entry' && (
+                        <div className="fixed bottom-0 left-0 right-0 glass px-5 py-4 z-20">
+                            <div className="max-w-md mx-auto">
+                                <button onClick={handleSave} className={`w-full text-white shadow-xl shadow-slate-300/50 rounded-2xl p-1.5 pr-3 flex items-center justify-between group tap-effect transition-all ${editingId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-slate-900 hover:bg-slate-800'}`}>
+                                    <div className={`rounded-xl px-5 py-3.5 flex items-center gap-2.5 transition-colors ${editingId ? 'bg-amber-600' : 'bg-slate-800'}`}>
+                                        <span className="text-white/70 text-xs font-bold uppercase tracking-wider">已选</span>
+                                        <span className="text-xl font-black text-white min-w-[1.5rem] text-center">{selectedStudents.length}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 pr-4">
+                                        <span className="font-bold text-lg tracking-wide">{editingId ? '更新记录' : '保存记录'}</span>
+                                        <Save size={20} className="text-white/80 group-hover:text-white transition-colors" />
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
