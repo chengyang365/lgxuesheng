@@ -5,6 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>班级学生记录助手</title>
     <meta name="theme-color" content="#f8fafc">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📋</text></svg>">
+    
+    <!-- PWA / iOS Web App 优化标签 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="学生助手">
+    <link rel="manifest" id="pwa-manifest">
+    <link rel="apple-touch-icon" id="apple-touch-icon">
+    
+    <!-- 内联 PWA 配置文件 (动态生成，保持单文件纯净) -->
+    <script>
+        const svgIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E📋%3C/text%3E%3C/svg%3E";
+        const manifestData = {
+            "name": "班级学生记录助手",
+            "short_name": "学生助手",
+            "display": "standalone",
+            "start_url": location.href.split('?')[0],
+            "background_color": "#f8fafc",
+            "theme_color": "#f8fafc",
+            "icons": [{"src": svgIcon, "sizes": "512x512", "type": "image/svg+xml"}]
+        };
+        document.getElementById('pwa-manifest').href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestData));
+        document.getElementById('apple-touch-icon').href = svgIcon;
+    </script>
+
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 React 和 ReactDOM -->
@@ -76,11 +101,18 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
+        // --- 防抖 Hook (优化建议6: 避免频繁操作卡顿) ---
+        const useDebounceEffect = (fn, deps, delay = 500) => {
+            useEffect(() => {
+                const timer = setTimeout(() => fn(), delay);
+                return () => clearTimeout(timer);
+            }, deps);
+        };
+
         // --- 图标组件 ---
         const Icon = ({ children, size = 20, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
         );
-        // 图标定义保持不变
         const Save = (p) => <Icon {...p}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></Icon>;
         const Check = (p) => <Icon {...p}><polyline points="20 6 9 17 4 12"></polyline></Icon>;
         const Trash2 = (p) => <Icon {...p}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></Icon>;
@@ -100,7 +132,7 @@
         const AlertTriangle = (p) => <Icon {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></Icon>;
         const X = (p) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></Icon>;
 
-        // --- 默认数据配置 (保持不变) ---
+        // --- 默认数据配置 ---
         const DEFAULT_CLASS_DATA = {
             "3B": [
                 "罗浩宇 ADEN LOW HAO YU", "沈晨暟 ADEN SIM CHEN KAI", "林启翔 EASON LIM QI SIANG", "张语骏 ISSAC CHONG YU JUN",
@@ -121,14 +153,13 @@
                 "杰米亚 JEREMIAH MANJAN ANAK EDAL", "江朾浩 KONG CHENG HAO", "刘鑫宏 LOW XIN HONG",
                 "黄天浩 LUCAS WONG TIAN HAO", "拉其克 MOHAMAD AQIL RAZIQ BIN MOHAMAD AZAM",
                 "拉斐 MOHAMAD RAFIUDDIN QAWI BIN KHAIRUL HISHAM", "沙鲁 MOHAMAD SHAHRUL IZUAN HAFIZIE BIN MOHD SYUKRI",
-                "亚司岚 MUHAMMAD ASHIM ASLAM BIN HASNIZAR", "叶健峰 STANLEY YAP KEN FENG", "陈其鸿 TONNY TING QI HONG",
-                "依达侑 ANIS NUUR IDAYU BINTI SALLEH", "碧碧 BIBI SAKINAH BINTI MOHD YUSOF", "尤妮 DEZWAYNE EUNICE ANAK GANI",
+                "叶健峰 STANLEY YAP KEN FENG", "陈其鸿 TONNY TING QI HONG", "依达侑 ANIS NUUR IDAYU BINTI SALLEH", "碧碧 BIBI SAKINAH BINTI MOHD YUSOF", "尤妮 DEZWAYNE EUNICE ANAK GANI",
                 "莎丽妮 ELLISA SARLINIE ANAK KENNEDY", "娅琪菈 FAZREEN SYAIDATUL AQIEYLA BINTI ABDUL FATTAH",
                 "王亿妠 INA ONG", "林杏恩 LIM XING EN", "罗玲微 LOH LING WEI", "露丝迪娅 NUR RUSHYDHIA HADIRAH BINTI MOHD RAEIF",
-                "潘巧欣 PHUAH QIAO XIN", "仂必妒 PUTRI RABIAHTUL ADIWIYA BINTI MUHADRI", "陈妤欣 TAN YU XIN"
+                "潘巧欣 PHUAH QIAO XIN", "仂必妒 PUTRI RABIAHTUL ADIWIYA BINTI MUHADRI", "陈妤欣 TAN YU XIN", "郑家勇 TEE JIA YONG"
             ],
             "4D": [
-                "EZANNY ALAN MIKHAIL BIN AIZAD", "法帝 AL FATEH RIFQI BIN ZAFRIE", "陈锦慷 ALWISH CHAN KAM HONG",
+                "法帝 AL FATEH RIFQI BIN ZAFRIE", "陈锦慷 ALWISH CHAN KAM HONG",
                 "骆禹皓 ANTONY LOCK YU HAO", "谢宇恒 CHAI YU HEN", "王丞昊 DANIEL WONG CHENG HAO",
                 "徐晨瀚 GRAYSON CHEE CHEN HAN", "徐传恩 JOEN SII", "赖楷泽 LAI KAI ZE", "李小龙 LEE XIAO LONG",
                 "黄伟宏 LEO WONG WEI HONG", "玛提修斯 MATIUS GASING ANAK ANTHONY", "哈扎 MUHAMAD HAMZAH BIN MOHD SHAFI RAFI",
@@ -141,11 +172,82 @@
                 "黄嘉欣 NG JIA XIN", "琪莎 NUR QISYA DANIA BINTI MOHAMAD JUHAIFI", "何拉 NURFATIMA HAMRA BINTI MOHAMAD BAKRI",
                 "阿淇拉 NURUL HUDA AQILA BINTI ROSLI", "雪灵 SHELYN RESHNA SURESH", "哈诗妮 SRI HASHINIE NAIR A/P SUDHAKARAN",
                 "罗凯恩 STELLA LOH KAI EN", "陈禹潼 TAN YU TONG", "丽亚娜 UNGKU ARIANA QALESYA BINTI UNGKU ISMAIL",
-                "李纹茹 VARRUNAAVIE LEE"
+                "李纹茹 VARRUNAAVIE LEE", "朱玉萱 JENNIFER CHU YU XUAN"
             ]
         };
 
         const QUICK_TAGS = ["没做功课", "缺席", "没带书", "迟到", "没签名", "吵闹", "表现优异", "帮助同学"];
+
+        // --- 将 Modal 移出 App，遵循 React 代码规范 ---
+        const DialogModal = ({ modalState, closeDialog, handleDialogConfirm }) => {
+            if (!modalState.show) return null;
+
+            const promptInputRef = useRef(null);
+
+            // 聚焦 prompt 输入框
+            useEffect(() => {
+                if (modalState.show && modalState.type === 'prompt' && promptInputRef.current) {
+                    setTimeout(() => promptInputRef.current.focus(), 100);
+                }
+            }, [modalState.show, modalState.type]);
+
+            return (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-fade-in">
+                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeDialog}></div>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 relative z-10 animate-scale-in flex flex-col gap-5 border border-white/50">
+                        <div className="flex items-center gap-3">
+                            {modalState.isDangerous ? (
+                                <div className="bg-red-50 p-3 rounded-2xl text-red-500 shadow-sm"><AlertTriangle size={24} /></div>
+                            ) : (
+                                <div className="bg-primary-50 p-3 rounded-2xl text-primary-600 shadow-sm"><Settings size={24} /></div>
+                            )}
+                            <h3 className="text-xl font-bold text-slate-800 tracking-tight">{modalState.title}</h3>
+                        </div>
+                        
+                        {modalState.message && (
+                            <p className="text-slate-600 text-sm leading-relaxed">{modalState.message}</p>
+                        )}
+
+                        {modalState.type === 'prompt' && (
+                            <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 focus-within:ring-2 focus-within:ring-primary-100 focus-within:border-primary-400 transition-all">
+                                <input 
+                                    ref={promptInputRef}
+                                    type="text" 
+                                    defaultValue={modalState.defaultValue}
+                                    className="w-full bg-transparent px-2 py-1 text-slate-800 outline-none placeholder:text-slate-400"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleDialogConfirm(e.target.value);
+                                    }}
+                                />
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 pt-2">
+                            <button 
+                                onClick={closeDialog} 
+                                className="flex-1 py-3.5 rounded-2xl font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 tap-effect"
+                            >
+                                取消
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    const val = modalState.type === 'prompt' ? promptInputRef.current?.value : true;
+                                    handleDialogConfirm(val);
+                                }}
+                                className={`flex-1 py-3.5 rounded-2xl font-bold text-sm text-white tap-effect shadow-lg shadow-primary-200 ${
+                                    modalState.isDangerous 
+                                        ? 'bg-red-500 hover:bg-red-600 shadow-red-100' 
+                                        : 'bg-primary-600 hover:bg-primary-700'
+                                }`}
+                            >
+                                确定
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
 
         function App() {
             // 获取本地时间字符串
@@ -162,13 +264,7 @@
             
             // --- 弹窗状态 ---
             const [modalState, setModalState] = useState({
-                show: false,
-                type: 'confirm', // 'confirm' or 'prompt' or 'alert'
-                title: '',
-                message: '',
-                defaultValue: '',
-                isDangerous: false,
-                onConfirm: null,
+                show: false, type: 'confirm', title: '', message: '', defaultValue: '', isDangerous: false, onConfirm: null,
             });
 
             // 数据相关状态
@@ -195,21 +291,20 @@
             const [toast, setToast] = useState({ show: false, msg: '', type: 'success' });
             const toastTimer = useRef(null);
             const fileInputRef = useRef(null);
-            const promptInputRef = useRef(null);
-            const settingsRef = useRef(null); // 设置面板引用
+            const settingsRef = useRef(null);
 
             // --- 班级管理状态 ---
             const [managerSelectedClass, setManagerSelectedClass] = useState(Object.keys(DEFAULT_CLASS_DATA)[0]);
             const [newStudentName, setNewStudentName] = useState('');
 
-            // --- 持久化 ---
-            useEffect(() => {
+            // --- 持久化 (加入防抖保护) ---
+            useDebounceEffect(() => {
                 localStorage.setItem('student_tracker_records', JSON.stringify(records));
-            }, [records]);
+            }, [records], 800);
 
-            useEffect(() => {
+            useDebounceEffect(() => {
                 localStorage.setItem('student_tracker_class_data', JSON.stringify(classData));
-            }, [classData]);
+            }, [classData], 800);
 
             // 安全检查
             useEffect(() => {
@@ -227,13 +322,6 @@
                 }
             }, [classData, managerSelectedClass]);
 
-            // 聚焦 prompt 输入框
-            useEffect(() => {
-                if (modalState.show && modalState.type === 'prompt' && promptInputRef.current) {
-                    setTimeout(() => promptInputRef.current.focus(), 100);
-                }
-            }, [modalState.show]);
-
             // 点击外部关闭设置面板
             useEffect(() => {
                 function handleClickOutside(event) {
@@ -244,7 +332,6 @@
                 document.addEventListener("mousedown", handleClickOutside);
                 return () => document.removeEventListener("mousedown", handleClickOutside);
             }, [showSettings]);
-
 
             // 切换班级时重置搜索
             useEffect(() => {
@@ -284,7 +371,6 @@
             };
 
             // --- 核心业务逻辑 ---
-
             const toggleStudent = (name) => {
                 setSelectedStudents(prev => 
                     prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
@@ -381,17 +467,17 @@
                 showToast("📝 进入编辑模式", "success");
             };
 
-            const copyRecord = (r) => {
+            // 升级采用现代 Clipboard API
+            const copyRecord = async (r) => {
                 const studentList = r.students.map((s, i) => `${i + 1}. ${s}`).join('\n');
                 const text = `📅 ${r.fullDate}\n🏫 ${r.className}\n📝 ${r.eventName}\n👥 名单 (${r.students.length}人):\n${studentList}`;
-                const textArea = document.createElement("textarea");
-                textArea.value = text;
-                textArea.style.position = "fixed";
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                try { document.execCommand('copy'); showToast("📋 已复制内容"); } catch (err) { showToast("❌ 复制失败", "error"); }
-                document.body.removeChild(textArea);
+                
+                try {
+                    await navigator.clipboard.writeText(text);
+                    showToast("📋 已复制内容");
+                } catch (err) {
+                    showToast("❌ 复制失败，请检查浏览器权限", "error");
+                }
             };
 
             // --- 班级名单管理逻辑 ---
@@ -561,72 +647,13 @@
                 return studentsInClass.some(s => selectedStudents.includes(s));
             };
 
-            // --- Modal Component (Inline) ---
-            const Modal = () => {
-                if (!modalState.show) return null;
-
-                const inputRef = useRef(null);
-
-                return (
-                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 animate-modal-fade">
-                        <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeDialog}></div>
-                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 relative z-10 animate-modal-scale flex flex-col gap-5 border border-white/50">
-                            <div className="flex items-center gap-3">
-                                {modalState.isDangerous ? (
-                                    <div className="bg-red-50 p-3 rounded-2xl text-red-500 shadow-sm"><AlertTriangle size={24} /></div>
-                                ) : (
-                                    <div className="bg-primary-50 p-3 rounded-2xl text-primary-600 shadow-sm"><Settings size={24} /></div>
-                                )}
-                                <h3 className="text-xl font-bold text-slate-800 tracking-tight">{modalState.title}</h3>
-                            </div>
-                            
-                            {modalState.message && (
-                                <p className="text-slate-600 text-sm leading-relaxed">{modalState.message}</p>
-                            )}
-
-                            {modalState.type === 'prompt' && (
-                                <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 focus-within:ring-2 focus-within:ring-primary-100 focus-within:border-primary-400 transition-all">
-                                    <input 
-                                        ref={promptInputRef}
-                                        type="text" 
-                                        defaultValue={modalState.defaultValue}
-                                        className="w-full bg-transparent px-2 py-1 text-slate-800 outline-none placeholder:text-slate-400"
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleDialogConfirm(e.target.value);
-                                        }}
-                                    />
-                                </div>
-                            )}
-
-                            <div className="flex gap-3 pt-2">
-                                <button 
-                                    onClick={closeDialog} 
-                                    className="flex-1 py-3.5 rounded-2xl font-bold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 tap-effect"
-                                >
-                                    取消
-                                </button>
-                                <button 
-                                    onClick={() => {
-                                        const val = modalState.type === 'prompt' ? promptInputRef.current.value : true;
-                                        handleDialogConfirm(val);
-                                    }}
-                                    className={`flex-1 py-3.5 rounded-2xl font-bold text-sm text-white tap-effect shadow-lg shadow-primary-200 ${
-                                        modalState.isDangerous 
-                                            ? 'bg-red-500 hover:bg-red-600 shadow-red-100' 
-                                            : 'bg-primary-600 hover:bg-primary-700'
-                                    }`}
-                                >
-                                    确定
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                );
-            };
-
             return (
                 <div className="min-h-screen pb-28 max-w-md mx-auto bg-slate-50 md:border-x md:border-slate-200 md:shadow-2xl relative overflow-hidden">
-                    <Modal />
+                    <DialogModal 
+                        modalState={modalState} 
+                        closeDialog={closeDialog} 
+                        handleDialogConfirm={handleDialogConfirm} 
+                    />
 
                     {/* 顶部导航 (Glass) */}
                     <div className="sticky top-0 z-30 glass px-5 py-4">
@@ -644,7 +671,7 @@
                                 
                                 {/* 设置面板 (Dropdown) */}
                                 {showSettings && (
-                                    <div className="absolute right-0 top-full mt-3 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 animate-scale-in z-50 origin-top-right">
+                                    <div className="absolute right-0 top-full mt-3 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 animate-scale-in z-50 origin-top-right">
                                         <button 
                                             onClick={() => { setShowClassManager(true); setShowSettings(false); }}
                                             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors text-left"
@@ -661,6 +688,16 @@
                                                 <div className="bg-slate-100 p-1.5 rounded-lg text-slate-500"><Upload size={16} /></div> 恢复数据
                                             </button>
                                             <input type="file" ref={fileInputRef} onChange={importData} className="hidden" accept=".json" />
+                                        </div>
+                                        
+                                        {/* 数据安全提醒 (优化建议) */}
+                                        <div className="px-3 py-2.5 mx-1 mb-1 mt-2 bg-amber-50 rounded-xl border border-amber-100">
+                                            <div className="flex items-center gap-1.5 text-amber-700 font-bold text-[11px] mb-1">
+                                                <AlertTriangle size={14} /> <span>数据安全提醒</span>
+                                            </div>
+                                            <p className="text-[10px] text-amber-600/90 leading-relaxed">
+                                                数据目前仅保存在浏览器缓存中。清除浏览器数据会导致记录丢失，建议定期点击上方进行<span className="font-bold underline ml-0.5">导出备份</span>。
+                                            </p>
                                         </div>
                                     </div>
                                 )}
